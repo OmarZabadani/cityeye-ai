@@ -4,7 +4,8 @@ import numpy as np
 from ultralytics import YOLO
 
 model = YOLO("yolov8n.pt")
-def process_image(image_path):
+
+def process_image1(image_path):
     # Load the image
     img = cv2.imread(image_path)
     if img is None:
@@ -15,4 +16,7 @@ def process_image(image_path):
     # Extract bounding boxes and class IDs
     boxes = results[0].boxes
     class_ids = boxes.cls.jpu().numpy().astype(int)
-    class_ids = boxes.cls.cpu().numpy().astype(int)
+    # Count the number of vehicles (class IDs 2, 3, 5, 7)
+    vehicle_count = sum(1 for cls_id in class_ids if cls_id in [2, 3, 5, 7])
+    return vehicle_count
+
