@@ -21,7 +21,7 @@ def process_number_of_cars(image_path):
     return vehicle_count
 
 
-image_path = r"D:\download\uni\year4\term2\GP2\Data\images\Screenshot 2026-04-15 185210.png"
+image_path = r"D:\download\uni\year4\term2\GP2\Data\images\aaa.png"
 
 count = process_number_of_cars(image_path)
 if count is not None:
