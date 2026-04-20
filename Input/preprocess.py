@@ -1,3 +1,28 @@
+"""
+Image Preprocessing Module
+
+This module provides a simple and robust pipeline for preparing images
+before feeding them into computer vision or AI models.
+
+Main functionality:
+1. Safely loads an image from disk with validation checks.
+2. Resizes the image to a fixed target size (default: 640x640),
+   ensuring consistency for model input.
+3. Optionally enhances image contrast using CLAHE (Contrast Limited
+   Adaptive Histogram Equalization) in LAB color space, which improves
+   visibility and feature quality under varying lighting conditions.
+
+Pipeline flow:
+    load image → validate → resize → (optional) enhance contrast → return processed image
+
+Functions:
+- load_resize_image: Handles image loading, validation, and resizing.
+- inhance_contrast: Applies CLAHE-based contrast enhancement.
+- preprocess_image: Combines all steps into a single preprocessing pipeline.
+
+This module is designed to be reusable and easily integrated into
+larger computer vision systems such as object detection or tracking.
+"""
 import os
 import cv2
 import numpy as np
