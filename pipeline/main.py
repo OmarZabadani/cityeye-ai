@@ -1,98 +1,148 @@
-"""This module serves as the main entry point for the vehicle counting application. 
-It orchestrates the entire pipeline, from loading images to processing them and counting vehicles."""
+"""
+Main Entry Point - Smart Traffic System
 
-import os
+This file connects:
+- Preprocessing
+- YOLO detection
+- Traffic simulation logic
+
+Run:
+    python main.py
+"""
+
 import cv2
 
-from pipeline.process_image import process_number_of_cars_and_types
+from preprocess import ImagePreprocessor
+from ultralytics import YOLO
+
+from traffic_logic import TrafficEngine
 
 
-def save_annotated_image(image_path, output_path, vehicle_count, vehicle_type_counts):
-    """
-    Save an annotated image with vehicle count and types.
-    """
-    img = cv2.imread(image_path)
+# =========================================================
+# System Controller
+# =========================================================
+class SmartTrafficSystem:
+    def __init__(self):
 
-    if img is None:
-        print(f"[ERROR] Could not load image: {image_path}")
-        return
+        # Device setup
+        self.device = "cuda"
 
-    # Draw total vehicle count
-    cv2.putText(
-        img,
-        f"Total Vehicles: {vehicle_count}",
-        (20, 40),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 255, 0),
-        2
-    )
-
-    # Draw vehicle type counts
-    y_offset = 80
-    for v_type, count in vehicle_type_counts.items():
-        cv2.putText(
-            img,
-            f"{v_type}: {count}",
-            (20, y_offset),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (255, 255, 0),
-            2
-        )
-        y_offset += 30
-
-    # Save output
-    cv2.imwrite(output_path, img)
-    print(f"[SAVED] {output_path}")
-
-
-def process_images(image_paths, output_dir):
-    """
-    Process multiple images and save annotated outputs.
-    """
-    os.makedirs(output_dir, exist_ok=True)
-
-    for image_path in image_paths:
-        print(f"\n[PROCESSING] {image_path}")
-
-        result = process_number_of_cars_and_types(image_path)
-
-        if result is None:
-            print("[SKIPPED] Invalid image")
-            continue
-
-        vehicle_count, vehicle_types, vehicle_type_counts = result
-
-        print(f"[RESULT] Total Vehicles: {vehicle_count}")
-        print(f"[DETAILS] {vehicle_type_counts}")
-
-        filename = os.path.basename(image_path)
-        output_path = os.path.join(output_dir, f"output_{filename}")
-
-        save_annotated_image(
-            image_path,
-            output_path,
-            vehicle_count,
-            vehicle_type_counts
+        # Models / modules
+        self.preprocessor = ImagePreprocessor(
+            target_size=640,
+            enhance=False,
+            normalize=False
         )
 
+        self.model = YOLO("models/yolov8n.pt")
 
-def main():
-    """
-    Entry point of the traffic analysis system.
-    """
+        self.engine = TrafficEngine()
 
-    image_paths = [
-        r"D:\download\uni\year4\term2\GP2\Data\images\bbb.jpg",
-        r"D:\download\uni\year4\term2\GP2\Data\images\Screenshot 2026-04-13 212234.png",
-        r"D:\download\uni\year4\term2\GP2\Data\images\Screenshot 2026-04-15 185210.png"
-    ]
+        # COCO mapping
+        self.vehicle_map = {
+            2: "car",
+            3: "motorcycle",
+            5: "bus",
+            7: "truck"
+        }
 
-    output_dir = r"D:\download\uni\year4\term2\GP2\Data\output"
+    # -----------------------------------------
+    # Step 1: YOLO detection
+    # -----------------------------------------
+    def detect_vehicles(self, frame):
+        results = self.model(frame, device=self.device)
 
-    process_images(image_paths, output_dir)
+        boxes = results[0].boxes
+
+        if boxes is None:
+            return []
+
+        class_ids = boxes.cls.cpu().numpy().astype(int)
+        confidences = boxes.conf.cpu().numpy()
+
+        detections = []
+
+        for cls_id, conf in zip(class_ids, confidences):
+            if cls_id in self.vehicle_map:
+                detections.append({
+                    "type": self.vehicle_map[cls_id],
+                    "confidence": float(conf)
+                })
+
+        return detections
+
+    # -----------------------------------------
+    # Step 2: Convert lane (simple version)
+    # -----------------------------------------
+    def assign_lane(self, detections):
+        """
+        Temporary logic:
+        All vehicles go to lane A
+        (Later: replace with bbox-based lane detection)
+        """
+
+        return "A", detections
+
+    # -----------------------------------------
+    # Step 3: Run full pipeline on frame
+    # -----------------------------------------
+    def process_frame(self, frame):
+
+        # 1. Preprocess
+        frame = self.preprocessor.process(frame)
+
+        # 2. Detect vehicles
+        detections = self.detect_vehicles(frame)
+
+        # 3. Assign lane
+        lane, detections = self.assign_lane(detections)
+
+        # 4. Feed traffic engine
+        self.engine.ingest_detections(detections, lane)
+
+        # 5. Run simulation step
+        decision = self.engine.step()
+
+        return decision, frame
+
+    # -----------------------------------------
+    # Step 4: Run webcam system
+    # -----------------------------------------
+    def run(self):
+        cap = cv2.VideoCapture(0)
+
+        if not cap.isOpened():
+            print("[ERROR] Camera not found")
+            return
+
+        print("[INFO] Smart Traffic System Running... Press ESC to exit")
+
+        while True:
+            ret, frame = cap.read()
+
+            if not ret:
+                break
+
+            decision, frame = self.process_frame(frame)
+
+            # Display result
+            text = f"{decision['action']} | {decision['vehicle']} | Lane {decision['lane']}"
+            cv2.putText(frame, text, (20, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                        (0, 255, 0), 2)
+
+            cv2.imshow("Smart Traffic System", frame)
+
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
+
+        cap.release()
+        cv2.destroyAllWindows()
 
 
+# =========================================================
+# Entry Point
+# =========================================================
 if __name__ == "__main__":
-    main()
+    system = SmartTrafficSystem()
+    system.run()
