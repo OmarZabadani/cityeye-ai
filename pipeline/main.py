@@ -15,7 +15,7 @@ import cv2
 from preprocess import ImagePreprocessor
 from ultralytics import YOLO
 
-from traffic_logic import TrafficEngine
+from logic import TrafficEngine
 
 
 # =========================================================
