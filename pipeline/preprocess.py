@@ -1,12 +1,14 @@
 """
-Image Preprocessing Module (Enhanced)
+Image Preprocessing Module (Production-Ready)
+
+Purpose:
+Prepare images consistently for AI models.
 
 Features:
-- Supports both file path and image array input
-- Aspect ratio preserving resize (letterbox)
-- Optional contrast enhancement (CLAHE)
+- Accepts file path OR numpy array
+- Aspect-ratio preserving resize (letterbox)
+- Optional CLAHE enhancement
 - Optional normalization
-- Modular pipeline design
 """
 
 import os
@@ -14,96 +16,73 @@ import cv2
 import numpy as np
 
 
-# ---------------------------
-# Core Functions
-# ---------------------------
+class ImagePreprocessor:
+    def __init__(self, target_size=640, enhance=False, normalize=False):
+        self.target_size = target_size
+        self.enhance = enhance
+        self.normalize = normalize
 
-def load_image(image_input):
-    """Load image from path OR pass-through if already an array"""
-    
-    if isinstance(image_input, str):
-        if not os.path.exists(image_input):
-            raise FileNotFoundError(f"Image not found: {image_input}")
+    # ---------------------------
+    # Public API
+    # ---------------------------
+    def process(self, image_input):
+        img = self._load(image_input)
+        img = self._resize_with_aspect_ratio(img)
 
-        img = cv2.imread(image_input)
+        if self.enhance:
+            img = self._enhance_contrast(img)
 
-        if img is None:
-            raise ValueError("Failed to read image")
+        if self.normalize:
+            img = self._normalize(img)
 
         return img
 
-    elif isinstance(image_input, np.ndarray):
-        return image_input
+    # ---------------------------
+    # Internal Methods
+    # ---------------------------
+    def _load(self, image_input):
+        if isinstance(image_input, str):
+            if not os.path.exists(image_input):
+                raise FileNotFoundError(f"Image not found: {image_input}")
 
-    else:
-        raise TypeError("Input must be file path or numpy array")
+            img = cv2.imread(image_input)
+            if img is None:
+                raise ValueError("Failed to read image")
 
+            return img
 
-def resize_with_aspect_ratio(image, target_size=640):
-    """Resize image while preserving aspect ratio (letterbox style)"""
+        elif isinstance(image_input, np.ndarray):
+            return image_input
 
-    h, w = image.shape[:2]
+        else:
+            raise TypeError("Input must be file path or numpy array")
 
-    scale = min(target_size / w, target_size / h)
-    new_w, new_h = int(w * scale), int(h * scale)
+    def _resize_with_aspect_ratio(self, image):
+        h, w = image.shape[:2]
 
-    resized = cv2.resize(image, (new_w, new_h))
+        scale = min(self.target_size / w, self.target_size / h)
+        new_w, new_h = int(w * scale), int(h * scale)
 
-    # Create padded image
-    canvas = np.zeros((target_size, target_size, 3), dtype=np.uint8)
+        resized = cv2.resize(image, (new_w, new_h))
 
-    x_offset = (target_size - new_w) // 2
-    y_offset = (target_size - new_h) // 2
+        canvas = np.zeros((self.target_size, self.target_size, 3), dtype=np.uint8)
 
-    canvas[y_offset:y_offset + new_h, x_offset:x_offset + new_w] = resized
+        x_offset = (self.target_size - new_w) // 2
+        y_offset = (self.target_size - new_h) // 2
 
-    return canvas
+        canvas[y_offset:y_offset + new_h, x_offset:x_offset + new_w] = resized
 
+        return canvas
 
-def enhance_contrast(image):
-    """Enhance image contrast using CLAHE"""
+    def _enhance_contrast(self, image):
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
 
-    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        cl = clahe.apply(l)
 
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    cl = clahe.apply(l)
+        limg = cv2.merge((cl, a, b))
+        return cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
 
-    limg = cv2.merge((cl, a, b))
-    return cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-
-
-def normalize_image(image):
-    """Normalize image to range [0, 1]"""
-
-    return image.astype(np.float32) / 255.0
-
-
-# ---------------------------
-# Full Pipeline
-# ---------------------------
-
-def preprocess_image(
-    image_input,
-    size=640,
-    enhance=True,
-    normalize=False
-):
-    """
-    Full preprocessing pipeline
-
-    Steps:
-    load → resize (aspect ratio) → enhance → normalize
-    """
-
-    img = load_image(image_input)
-
-    img = resize_with_aspect_ratio(img, target_size=size)
-
-    if enhance:
-        img = enhance_contrast(img)
-
-    if normalize:
-        img = normalize_image(img)
-
-    return img
+    def _normalize(self, image):
+        return image.astype(np.float32) / 255.0
